@@ -326,6 +326,8 @@ public class ElasticsearchIO {
 
     public abstract @Nullable String getKeystorePassword();
 
+    public abstract @Nullable HttpRequestInterceptor getAuthorizationIntercepter();
+
     public abstract String getIndex();
 
     public abstract String getType();
@@ -353,6 +355,8 @@ public class ElasticsearchIO {
       abstract Builder setKeystorePath(String keystorePath);
 
       abstract Builder setKeystorePassword(String password);
+
+      abstract Builder setAuthorizationIntercepter(HttpRequestInterceptor intercepter);
 
       abstract Builder setIndex(String index);
 
@@ -533,6 +537,19 @@ public class ElasticsearchIO {
     }
 
     /**
+     * If authenticating via a gateway requiring any custom modification of the request (For example,
+     *  request signing) provide an intercepter to be called just prior to executing the request
+     *
+     * @param authorizationIntercepter the intercepter to be called when executing requests
+     * @return a {@link ConnectionConfiguration} describes a connection configuration to
+     *     Elasticsearch.
+     */
+    public ConnectionConfiguration withAuthorizationIntercepter(HttpRequestInterceptor authorizationIntercepter) {
+      checkArgument(authorizationIntercepter != null, "authorizationIntercepter can not be null");
+      return builder().setAuthorizationIntercepter(authorizationIntercepter).build();
+    }
+
+    /**
      * If Elasticsearch uses SSL/TLS then configure whether to trust self signed certs or not. The
      * default is false.
      *
@@ -627,6 +644,12 @@ public class ElasticsearchIO {
           throw new IOException("Can't load the client certificate from the keystore", e);
         }
       }
+      if (getAuthorizationIntercepter() != null) {
+        restClientBuilder.setHttpClientConfigCallback(
+                httpAsyncClientBuilder ->
+                        httpAsyncClientBuilder.addInterceptorLast(getAuthorizationIntercepter()));
+      }
+
       restClientBuilder.setRequestConfigCallback(
           new RestClientBuilder.RequestConfigCallback() {
             @Override
